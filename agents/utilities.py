@@ -11,12 +11,12 @@ class ExperienceReplayBuffer:
         action_shape = list(action_shape)
 
         # Get replay shapes
-        state_replay_shape = state_shape.insert(0, size)
-        action_replay_shape = action_shape.insert(0, size)
+        state_shape.insert(0, size)
+        action_shape.insert(0, size)
 
         # Initialise experience with zeros
-        self.experience = {'s_t': np.zeros(state_replay_shape),
-                           'a_t': np.zeros(action_replay_shape),
+        self.experience = {'s_t': np.zeros(state_shape),
+                           'a_t': np.zeros(action_shape),
                            'r_t_1': np.zeros(size)}
 
         # Initialise fill counter and sample indices
@@ -32,7 +32,7 @@ class ExperienceReplayBuffer:
         """
         # Determine index at which to add experience
         if self.fill_counter < self.size:
-            #
+            # Using an array of indices so that the whole of the memory doesn't need to be copied and overwritten
             self.sample_indices = np.append(self.sample_indices, self.fill_counter)
             add_index = self.sample_indices[-1]
 
@@ -61,7 +61,7 @@ class ExperienceReplayBuffer:
         # Sample from replay buffer
         s_t = self.experience['s_t'][batch_indices]
         a_t = self.experience['a_t'][batch_indices]
-        s_t_1 = self.experience['s_t_1'][batch_indices + 1]
+        s_t_1 = self.experience['s_t'][batch_indices + 1]
         r_t_1 = self.experience['r_t_1'][batch_indices]
 
         return s_t, a_t, s_t_1, r_t_1

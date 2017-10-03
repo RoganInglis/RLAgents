@@ -40,6 +40,7 @@ class BaseAgent(object):
         self.learning_rate = self.config['learning_rate']
         self.l2 = self.config['l2']
         self.batch_size = self.config['batch_size']
+        self.replay_buffer_size = self.config['replay_buffer_size']
 
         # Create environment
         self.env = gym.make(self.config['env'])

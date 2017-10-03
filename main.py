@@ -32,6 +32,7 @@ flags.DEFINE_float('learning_rate', 1e-3, 'The learning rate of SGD')
 flags.DEFINE_float('drop_keep_prob', 1.0, 'The dropout keep probability')
 flags.DEFINE_float('l2', 0.0, 'L2 regularisation strength')
 flags.DEFINE_integer('batch_size', 64, 'Batch size')
+flags.DEFINE_integer('replay_buffer_size', 1000000, 'Number of timesteps to store in the replay buffer')
 
 # Environment configuration
 flags.DEFINE_string('env', 'CartPole-v0', 'Name of the gym environment to use')
