@@ -3,6 +3,7 @@ import copy
 import json
 import tensorflow as tf
 import numpy as np
+import gym
 from agents import utilities
 
 
@@ -29,12 +30,19 @@ class BaseAgent(object):
         # All models share some basics hyper parameters, this is the section where we
         # copy them into the model
         self.result_dir = self.config['result_dir']
+        self.test_result_dir = self.config['test_result_dir']
         self.max_iter = self.config['max_iter']
         self.max_train_episodes = self.config['max_train_episodes']
+        self.test_episodes = self.config['test_episodes']
+        self.test_every = self.config['test_every']
+        self.render_test_every = self.config['render_test_every']
         self.drop_keep_prob = self.config['drop_keep_prob']
         self.learning_rate = self.config['learning_rate']
         self.l2 = self.config['l2']
         self.batch_size = self.config['batch_size']
+
+        # Create environment
+        self.env = gym.make(self.config['env'])
 
         # Now the child Model needs some custom parameters, to avoid any
         # inheritance hell with the __init__ function, the model
@@ -54,7 +62,8 @@ class BaseAgent(object):
         gpu_options = tf.GPUOptions(allow_growth=True)
         sess_config = tf.ConfigProto(gpu_options=gpu_options)
         self.sess = tf.Session(config=sess_config, graph=self.graph)
-        self.summary_writer = tf.summary.FileWriter(self.result_dir, self.sess.graph)
+        self.train_summary_writer = tf.summary.FileWriter(self.result_dir, self.sess.graph)
+        self.test_summary_writer = tf.summary.FileWriter(self.test_result_dir, self.sess.graph)
 
         # This function is not always common to all models, that's why it's again
         # separated from the __init__ one
@@ -79,11 +88,50 @@ class BaseAgent(object):
     def build_graph(self, graph):
         raise Exception('The build_graph function must be overriden by the agent')
 
-    def act(self):
+    def act(self, observation):
         raise Exception('The act function must be overriden by the agent')
 
     def test(self):
-        raise Exception('The test function must be overriden by the agent')
+        # Initialise performance record arrays
+        episode_lengths = np.zeros(self.test_episodes)
+        episode_returns = np.zeros(self.test_episodes)
+
+        for episode in range(self.test_episodes):
+            # Initialise episode
+            observation = self.env.reset()
+            done = False
+            episode_length = 0
+            episode_return = 0
+
+            # Check whether to render this episode
+            render = self.render_test_every > 0 and (episode % self.render_test_every) == 0
+
+            while not done:
+                # Render environment if required
+                if render:
+                    self.env.render()
+
+                # Increment episode length
+                episode_length += 1
+
+                # Decide next action
+                action = self.act(observation)
+
+                # Act and get next observation, reward and episode status
+                observation, reward, done, _ = self.env.step(action)
+
+                # Increment total reward
+                episode_return += reward
+
+            # Record episode length and total reward
+            episode_lengths[episode] = episode_length
+            episode_returns[episode] = total_reward
+
+        # Compute mean episode length and total reward
+        mean_episode_length = np.mean(episode_lengths)
+        mean_episode_return = np.mean(episode_returns)
+
+        return mean_episode_length, mean_episode_return
 
     def learn_from_episode(self):
         # I like to separate the function to train per epoch and the function to train globally
@@ -91,11 +139,9 @@ class BaseAgent(object):
 
     def train(self, save_every=1):
         # This function is usually common to all your models
-        self.summary_index = 0
         for self.episode_id in range(0, self.max_train_episodes):
+            # Perform all TensorBoard operations within learn_from_episode
             self.learn_from_episode()
-
-            # Perform epoch TensorBoard operations here if necessary
 
             # If you don't want to save during training, you can just pass a negative number
             if save_every > 0 and self.episode_id % save_every == 0:

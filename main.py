@@ -33,16 +33,27 @@ flags.DEFINE_float('drop_keep_prob', 1.0, 'The dropout keep probability')
 flags.DEFINE_float('l2', 0.0, 'L2 regularisation strength')
 flags.DEFINE_integer('batch_size', 64, 'Batch size')
 
+# Environment configuration
+flags.DEFINE_string('env', 'CartPole-v0', 'Name of the gym environment to use')
+
 # Training configuration
 flags.DEFINE_boolean('debug', False, 'Debug mode')
 flags.DEFINE_integer('max_iter', 1000000, 'Max number of training iterations')
 flags.DEFINE_integer('max_train_episodes', 1000, 'Max number of training episodes')
 flags.DEFINE_boolean('test', False, 'Load a model and compute test performance')
+flags.DEFINE_integer('test_episodes', 100, 'Number of episodes over which to compute test results')
+flags.DEFINE_integer('test_every', 10, 'Episode interval at which to test the agent during training')
+flags.DEFINE_integer('render_test_every', 10, 'Episode interval at which to render the environment during testing')
 
 # This is very important for TensorBoard
 # each model will end up in its own unique folder using time module
 # Obviously one can also choose to name the output folder
-flags.DEFINE_string('result_dir', project_dir + '/results/' + flags.FLAGS.model_name + '/' + str(int(time.time())), 'Name of the directory to store/log the model (if it exists, the model will be loaded from it)')
+flags.DEFINE_string('result_dir', project_dir + '/results/' + flags.FLAGS.model_name + '/' + flags.env + '/' +
+                    str(int(time.time())),
+                    'Name of the directory to store/log the model (if it exists, the model will be loaded from it)')
+flags.DEFINE_string('test_result_dir', project_dir + '/results/' + flags.FLAGS.model_name + '/' + flags.env + '/' +
+                    str(int(time.time())) + '/test',
+                    'Name of the directory to store/log the model test results (for TensorBoard)')
 
 # Another important point, you must provide an access to the random seed
 # to be able to fully reproduce an experiment
