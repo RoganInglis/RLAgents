@@ -4,7 +4,7 @@ import json
 import tensorflow as tf
 import numpy as np
 import gym
-from agents import utilities
+from agents import utils
 
 
 class BaseAgent(object):

@@ -1,6 +1,6 @@
 import tensorflow as tf
 from agents.base_agent import BaseAgent
-from agents import utilities
+from agents import utils
 
 
 class DQNAgent(BaseAgent):
@@ -45,5 +45,5 @@ class DQNAgent(BaseAgent):
 
         # Initialise experience replay buffer
         state_shape = self.env.observation_space.shape
-        self.replay_buffer = utilities.ExperienceReplayBuffer(self.replay_buffer_size,
-                                                              state_shape, [self.env.action_space.n])
+        self.replay_buffer = utils.ExperienceReplayBuffer(self.replay_buffer_size,
+                                                          state_shape, [self.env.action_space.n])
