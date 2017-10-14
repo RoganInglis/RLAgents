@@ -41,6 +41,12 @@ class BaseAgent(object):
         self.l2 = self.config['l2']
         self.batch_size = self.config['batch_size']
         self.replay_buffer_size = self.config['replay_buffer_size']
+        self.gamma = self.config['gamma']
+        self.epsilon = self.config['epsilon']
+
+        #  Other initialisations
+        self.env_steps = 0
+        self.train_iter = 0
 
         # Create environment
         self.env = gym.make(self.config['env'])
@@ -71,12 +77,12 @@ class BaseAgent(object):
         self.init()
 
     def set_model_props(self, config):
-        # This function is here to be overriden completely.
+        # This function is here to be overridden completely.
         # When you look at your model, you want to know exactly which custom options it needs.
         pass
 
     def get_best_config(self):
-        # This function is here to be overriden completely.
+        # This function is here to be overridden completely.
         # It returns a dictionary used to update the initial configuration (see __init__)
         return {}
 
@@ -84,13 +90,13 @@ class BaseAgent(object):
     def get_random_config(fixed_params={}):
         # Why static? Because you want to be able to pass this function to other processes
         # so they can independently generate random configuration of the current model
-        raise Exception('The get_random_config function must be overriden by the agent')
+        raise Exception('The get_random_config function must be overridden by the agent')
 
     def build_graph(self, graph):
-        raise Exception('The build_graph function must be overriden by the agent')
+        raise Exception('The build_graph function must be overridden by the agent')
 
     def act(self, observation):
-        raise Exception('The act function must be overriden by the agent')
+        raise Exception('The act function must be overridden by the agent')
 
     def test(self):
         # Initialise performance record arrays
@@ -126,7 +132,7 @@ class BaseAgent(object):
 
             # Record episode length and total reward
             episode_lengths[episode] = episode_length
-            episode_returns[episode] = total_reward
+            episode_returns[episode] = episode_return
 
         # Compute mean episode length and total reward
         mean_episode_length = np.mean(episode_lengths)
@@ -136,7 +142,7 @@ class BaseAgent(object):
 
     def learn_from_episode(self):
         # I like to separate the function to train per epoch and the function to train globally
-        raise Exception('The learn_from_epoch function must be overriden by the agent')
+        raise Exception('The learn_from_epoch function must be overridden by the agent')
 
     def train(self, save_every=1):
         # This function is usually common to all your models
@@ -152,7 +158,7 @@ class BaseAgent(object):
         # This function is usually common to all your models, Here is an example:
         if self.config['debug']:
             print('Saving to %s' % self.result_dir)
-        self.saver.save(self.sess, self.result_dir + '/model-ep_' + str(self.epoch_id))
+        self.saver.save(self.sess, self.result_dir + '/model-ep_' + str(self.episode_id))
 
         # I always keep the configuration that
         if not os.path.isfile(self.result_dir + '/config.json'):

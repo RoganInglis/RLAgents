@@ -33,6 +33,8 @@ flags.DEFINE_float('drop_keep_prob', 1.0, 'The dropout keep probability')
 flags.DEFINE_float('l2', 0.0, 'L2 regularisation strength')
 flags.DEFINE_integer('batch_size', 64, 'Batch size')
 flags.DEFINE_integer('replay_buffer_size', 1000000, 'Number of timesteps to store in the replay buffer')
+flags.DEFINE_float('gamma', 0.1, 'Discount parameter for TD learning')
+flags.DEFINE_float('epsilon', 0.01, 'Exploration parameter for epsilon greedy exploration')
 
 # Environment configuration
 flags.DEFINE_string('env', 'CartPole-v0', 'Name of the gym environment to use')
@@ -49,10 +51,10 @@ flags.DEFINE_integer('render_test_every', 10, 'Episode interval at which to rend
 # This is very important for TensorBoard
 # each model will end up in its own unique folder using time module
 # Obviously one can also choose to name the output folder
-flags.DEFINE_string('result_dir', project_dir + '/results/' + flags.FLAGS.model_name + '/' + flags.env + '/' +
+flags.DEFINE_string('result_dir', project_dir + '/results/' + flags.FLAGS.agent_name + '/' + flags.env + '/' +
                     str(int(time.time())),
                     'Name of the directory to store/log the model (if it exists, the model will be loaded from it)')
-flags.DEFINE_string('test_result_dir', project_dir + '/results/' + flags.FLAGS.model_name + '/' + flags.env + '/' +
+flags.DEFINE_string('test_result_dir', project_dir + '/results/' + flags.FLAGS.agent_name + '/' + flags.env + '/' +
                     str(int(time.time())) + '/test',
                     'Name of the directory to store/log the model test results (for TensorBoard)')
 

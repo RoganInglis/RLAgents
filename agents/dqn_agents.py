@@ -1,6 +1,8 @@
 import tensorflow as tf
+import numpy as np
 from agents.base_agent import BaseAgent
 from agents import utils
+from agents import losses
 
 
 class DQNAgent(BaseAgent):
@@ -21,14 +23,76 @@ class DQNAgent(BaseAgent):
         raise Exception('The get_random_config function must be overriden by the agent')
 
     def build_graph(self, graph):
-        raise Exception('The build_graph function must be overriden by the agent')
+        with graph.as_default():
+            tf.set_random_seed(self.random_seed)
 
-    def act(self, observation):
-        raise Exception('The act function must be overriden by the agent')
+            self.placeholders = {'observation_t': tf.placeholder('float', [None, ]),
+                                 'action_t': tf.placeholder('int', [None]),
+                                 'observation_t_1': tf.placeholder('float', [None, ]),
+                                 'reward_t_1': tf.placeholder('float', [None]),
+                                 'done': tf.placeholder('int', [None])}
 
-    def learn_from_episode(self):
-        # I like to separate the function to train per epoch and the function to train globally
-        raise Exception('The learn_from_epoch function must be overriden by the agent')
+            # Create Q t net
+            q_t = []  # TODO - need to deal with parameter sharing between q_t and q_t_1
+
+            # Create Q t + 1 net
+            q_t_1 = []
+
+            # Create op to get action based on observation t
+            self.action = tf.argmax(q_t)
+
+            self.loss = losses.one_step_td_loss(self.placeholders['reward_t_1'],
+                                                self.gamma,
+                                                q_t,
+                                                q_t_1,
+                                                self.placeholders['action_t'],
+                                                self.placeholders['done'])
+
+            optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
+            self.train_op = optimiser.minimize(self.loss)
+
+            self.summary = tf.summary.merge_all()
+        return graph
+
+    def act(self, observation, explore=False):
+        # If required choose action according to exploration policy
+        if (np.random.uniform() < self.epsilon) and explore is True:
+            action = self.env.action_space.sample()
+        else:
+            action = self.sess.run(self.action, feed_dict={self.placeholders['observation_t']: observation})
+        return action
+
+    def learn_from_episode(self, learn_every=1):
+        observation_t = self.env.reset()
+        done = False
+
+        while not done:
+            # Decide which action to take based on current observation
+            action_t = self.act(observation_t)
+
+            # Take action in environment and get next observation, reward and done bool
+            observation_t_1, reward_t_1, done, _ = self.env.step(action_t)
+
+            # Add experience to replay buffer
+            self.replayBuffer.add(observation_t, action_t, observation_t_1, reward_t_1, done)
+
+            # Learn from experience
+            if self.env_steps % learn_every == 0:
+                # Get batch of experience from replay buffer
+                feed_dict = self.replayBuffer.get_batch_feed_dict(self.batch_size, self.placeholders)
+
+                # Update parameters
+                self.sess.run(self.train_op, feed_dict=feed_dict)
+
+                # Perform Tensorboard operations
+                # TODO - tensorboard operations
+
+                self.train_iter += 1
+
+            self.env_steps += 1
+
+            # Set next observation to current observation for next iteration
+            observation_t = observation_t_1
 
     def init(self):
         # This function is usually common to all your models
@@ -45,5 +109,4 @@ class DQNAgent(BaseAgent):
 
         # Initialise experience replay buffer
         state_shape = self.env.observation_space.shape
-        self.replay_buffer = utils.ExperienceReplayBuffer(self.replay_buffer_size,
-                                                          state_shape, [self.env.action_space.n])
+        self.replayBuffer = utils.ExperienceReplayBuffer(self.replay_buffer_size, state_shape)
