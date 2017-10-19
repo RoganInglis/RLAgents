@@ -3,6 +3,7 @@ import numpy as np
 from agents.base_agent import BaseAgent
 from agents import utils
 from agents import losses
+from agents import value_networks
 
 
 class DQNAgent(BaseAgent):
@@ -26,20 +27,29 @@ class DQNAgent(BaseAgent):
         with graph.as_default():
             tf.set_random_seed(self.random_seed)
 
-            self.placeholders = {'observation_t': tf.placeholder('float', [None, ]),
-                                 'action_t': tf.placeholder('int', [None]),
-                                 'observation_t_1': tf.placeholder('float', [None, ]),
+            observation_placeholder_shape = [None]
+            observation_placeholder_shape.extend(self.env.observation_space.shape)
+
+            self.placeholders = {'observation_t': tf.placeholder('float', observation_placeholder_shape),
+                                 'action_t': tf.placeholder(tf.int32, [None]),
+                                 'observation_t_1': tf.placeholder('float', observation_placeholder_shape),
                                  'reward_t_1': tf.placeholder('float', [None]),
-                                 'done': tf.placeholder('int', [None])}
+                                 'done': tf.placeholder('float', [None])}
 
             # Create Q t net
-            q_t = []  # TODO - need to deal with parameter sharing between q_t and q_t_1
+            q_t = value_networks.multi_layer_perceptron(self.placeholders['observation_t'],
+                                                        [100, 50, self.env.action_space.n])  # TODO - need to deal with parameter sharing between q_t and q_t_1
+            tf.summary.histogram('q_t', q_t)
 
             # Create Q t + 1 net
-            q_t_1 = []
+            q_t_1 = value_networks.multi_layer_perceptron(self.placeholders['observation_t'],
+                                                          [100, 50, self.env.action_space.n],
+                                                          reuse=True)
+            tf.summary.histogram('q_t_1', q_t_1)
 
             # Create op to get action based on observation t
-            self.action = tf.argmax(q_t)
+            self.action = tf.argmax(q_t, axis=1)
+            tf.summary.histogram('action', self.action)
 
             self.loss = losses.one_step_td_loss(self.placeholders['reward_t_1'],
                                                 self.gamma,
@@ -47,11 +57,12 @@ class DQNAgent(BaseAgent):
                                                 q_t_1,
                                                 self.placeholders['action_t'],
                                                 self.placeholders['done'])
+            tf.summary.scalar('Loss', self.loss)
 
             optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
             self.train_op = optimiser.minimize(self.loss)
 
-            self.summary = tf.summary.merge_all()
+            self.train_summary = tf.summary.merge_all()
         return graph
 
     def act(self, observation, explore=False):
@@ -59,16 +70,20 @@ class DQNAgent(BaseAgent):
         if (np.random.uniform() < self.epsilon) and explore is True:
             action = self.env.action_space.sample()
         else:
-            action = self.sess.run(self.action, feed_dict={self.placeholders['observation_t']: observation})
+            action = self.sess.run(self.action, feed_dict={self.placeholders['observation_t']: np.expand_dims(observation, 0)})
+            action = action[0]
         return action
 
-    def learn_from_episode(self, learn_every=1):
+    def learn_from_episode(self, learn_every=1, render=False):
         observation_t = self.env.reset()
         done = False
 
         while not done:
+            if render:
+                self.env.render()
+
             # Decide which action to take based on current observation
-            action_t = self.act(observation_t)
+            action_t = self.act(observation_t, explore=True)
 
             # Take action in environment and get next observation, reward and done bool
             observation_t_1, reward_t_1, done, _ = self.env.step(action_t)
@@ -82,10 +97,10 @@ class DQNAgent(BaseAgent):
                 feed_dict = self.replayBuffer.get_batch_feed_dict(self.batch_size, self.placeholders)
 
                 # Update parameters
-                self.sess.run(self.train_op, feed_dict=feed_dict)
+                _, train_summary = self.sess.run([self.train_op, self.train_summary], feed_dict=feed_dict)
 
                 # Perform Tensorboard operations
-                # TODO - tensorboard operations
+                self.train_summary_writer.add_summary(train_summary, self.env_steps)
 
                 self.train_iter += 1
 

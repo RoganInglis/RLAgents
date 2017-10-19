@@ -36,6 +36,7 @@ class BaseAgent(object):
         self.test_episodes = self.config['test_episodes']
         self.test_every = self.config['test_every']
         self.render_test_every = self.config['render_test_every']
+        self.render_every = self.config['render_every']
         self.drop_keep_prob = self.config['drop_keep_prob']
         self.learning_rate = self.config['learning_rate']
         self.l2 = self.config['l2']
@@ -64,6 +65,14 @@ class BaseAgent(object):
         with self.graph.as_default():
             self.saver = tf.train.Saver(max_to_keep=50)
             self.init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+
+            # Add test summary ops
+            self.test_placeholders = {'mean_episode_length': tf.placeholder(tf.float32),
+                                      'mean_episode_return': tf.placeholder(tf.float32)}
+            mean_episode_length_summary = tf.summary.scalar('mean_episode_length', self.test_placeholders['mean_episode_length'])
+            mean_episode_return_summary = tf.summary.scalar('mean_episode_return', self.test_placeholders['mean_episode_return'])
+
+            self.test_summary = tf.summary.merge([mean_episode_length_summary, mean_episode_return_summary])
 
         # Add all the other common code for the initialization here
         gpu_options = tf.GPUOptions(allow_growth=True)
@@ -140,15 +149,28 @@ class BaseAgent(object):
 
         return mean_episode_length, mean_episode_return
 
-    def learn_from_episode(self):
+    def learn_from_episode(self, learn_every=1, render=False):
         # I like to separate the function to train per epoch and the function to train globally
         raise Exception('The learn_from_epoch function must be overridden by the agent')
 
     def train(self, save_every=1):
         # This function is usually common to all your models
         for self.episode_id in range(0, self.max_train_episodes):
+            if self.episode_id % self.render_every == 0:
+                render = True
+            else:
+                render = False
+
+            if self.episode_id % self.test_every == 0:
+                mean_episode_length, mean_episode_return = self.test()
+                test_feed_dict = {self.test_placeholders['mean_episode_length']: mean_episode_length,
+                                  self.test_placeholders['mean_episode_return']: mean_episode_return}
+
+                test_summary = self.sess.run(self.test_summary, feed_dict=test_feed_dict)
+                self.test_summary_writer.add_summary(test_summary, self.env_steps)
+
             # Perform all TensorBoard operations within learn_from_episode
-            self.learn_from_episode()
+            self.learn_from_episode(render=render)
 
             # If you don't want to save during training, you can just pass a negative number
             if save_every > 0 and self.episode_id % save_every == 0:

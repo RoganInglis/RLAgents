@@ -26,15 +26,15 @@ flags.DEFINE_integer('nb_process', 4, 'Number of parallel process to perform a H
 flags.DEFINE_string('fixed_params', "{}", 'JSON inputs to fix some params in a HP search, ex: \'{"lr": 0.001}\'')
 
 # Model configuration
-flags.DEFINE_string('agent_name', 'ReinforceModelBlackBoxReader', 'Unique name of the agent')
+flags.DEFINE_string('agent_name', 'DQNAgent', 'Unique name of the agent')
 flags.DEFINE_boolean('best', False, 'Force to use the best known configuration')
-flags.DEFINE_float('learning_rate', 1e-3, 'The learning rate of SGD')
+flags.DEFINE_float('learning_rate', 1e-4, 'The learning rate of SGD')
 flags.DEFINE_float('drop_keep_prob', 1.0, 'The dropout keep probability')
 flags.DEFINE_float('l2', 0.0, 'L2 regularisation strength')
 flags.DEFINE_integer('batch_size', 64, 'Batch size')
 flags.DEFINE_integer('replay_buffer_size', 1000000, 'Number of timesteps to store in the replay buffer')
-flags.DEFINE_float('gamma', 0.1, 'Discount parameter for TD learning')
-flags.DEFINE_float('epsilon', 0.01, 'Exploration parameter for epsilon greedy exploration')
+flags.DEFINE_float('gamma', 0.05, 'Discount parameter for TD learning')
+flags.DEFINE_float('epsilon', 0.05, 'Exploration parameter for epsilon greedy exploration')
 
 # Environment configuration
 flags.DEFINE_string('env', 'CartPole-v0', 'Name of the gym environment to use')
@@ -46,15 +46,16 @@ flags.DEFINE_integer('max_train_episodes', 1000, 'Max number of training episode
 flags.DEFINE_boolean('test', False, 'Load a model and compute test performance')
 flags.DEFINE_integer('test_episodes', 100, 'Number of episodes over which to compute test results')
 flags.DEFINE_integer('test_every', 10, 'Episode interval at which to test the agent during training')
-flags.DEFINE_integer('render_test_every', 10, 'Episode interval at which to render the environment during testing')
+flags.DEFINE_integer('render_test_every', 100, 'Episode interval at which to render the environment during testing')
+flags.DEFINE_integer('render_every', 50, 'Episode interval at which to render the environment during training')
 
 # This is very important for TensorBoard
 # each model will end up in its own unique folder using time module
 # Obviously one can also choose to name the output folder
-flags.DEFINE_string('result_dir', project_dir + '/results/' + flags.FLAGS.agent_name + '/' + flags.env + '/' +
+flags.DEFINE_string('result_dir', project_dir + '/results/' + flags.FLAGS.agent_name + '/' + flags.FLAGS.env + '/' +
                     str(int(time.time())),
                     'Name of the directory to store/log the model (if it exists, the model will be loaded from it)')
-flags.DEFINE_string('test_result_dir', project_dir + '/results/' + flags.FLAGS.agent_name + '/' + flags.env + '/' +
+flags.DEFINE_string('test_result_dir', project_dir + '/results/' + flags.FLAGS.agent_name + '/' + flags.FLAGS.env + '/' +
                     str(int(time.time())) + '/test',
                     'Name of the directory to store/log the model test results (for TensorBoard)')
 
@@ -73,10 +74,8 @@ def main(_):
     else:
         agent = make_agent(config)
 
-        if config['infer']:
-            # Some code for inference ...
-            agent.infer()
-        elif config['test']:
+        if config['test']:
+            # Some code for testing ...
             agent.test()
         else:
             # Some code for training ...

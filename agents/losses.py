@@ -12,9 +12,6 @@ def one_step_td_loss(reward_t_1, gamma, q_t, q_t_1, action_t, done):
         value_estimate = tf.gather_nd(q_t, action_t_index)
         value_target = tf.stop_gradient(reward_t_1 + tf.multiply((1 - done), gamma*tf.reduce_max(q_t_1)))
 
-        # Calculate Bellman residual
-        delta = value_target - value_estimate
-
-        # Compute mean loss for batch
-        loss = tf.reduce_mean(tf.square(delta))
+        # Compute mean Huber loss for batch
+        loss = tf.losses.huber_loss(value_target, value_estimate)
     return loss
