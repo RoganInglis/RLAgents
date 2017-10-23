@@ -38,12 +38,12 @@ class DQNAgent(BaseAgent):
 
             # Create Q t net
             q_t = value_networks.multi_layer_perceptron(self.placeholders['observation_t'],
-                                                        [100, 50, self.env.action_space.n])  # TODO - need to deal with parameter sharing between q_t and q_t_1
+                                                        [10, 5, self.env.action_space.n])  # TODO - need to deal with parameter sharing between q_t and q_t_1
             tf.summary.histogram('q_t', q_t)
 
             # Create Q t + 1 net
             q_t_1 = value_networks.multi_layer_perceptron(self.placeholders['observation_t'],
-                                                          [100, 50, self.env.action_space.n],
+                                                          [10, 5, self.env.action_space.n],
                                                           reuse=True)
             tf.summary.histogram('q_t_1', q_t_1)
 
@@ -56,7 +56,7 @@ class DQNAgent(BaseAgent):
                                                 q_t,
                                                 q_t_1,
                                                 self.placeholders['action_t'],
-                                                self.placeholders['done'])
+                                                self.placeholders['done'], debug_tb_ops=True)
             tf.summary.scalar('Loss', self.loss)
 
             optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)

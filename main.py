@@ -28,12 +28,12 @@ flags.DEFINE_string('fixed_params', "{}", 'JSON inputs to fix some params in a H
 # Model configuration
 flags.DEFINE_string('agent_name', 'DQNAgent', 'Unique name of the agent')
 flags.DEFINE_boolean('best', False, 'Force to use the best known configuration')
-flags.DEFINE_float('learning_rate', 1e-4, 'The learning rate of SGD')
+flags.DEFINE_float('learning_rate', 1e-3, 'The learning rate of SGD')
 flags.DEFINE_float('drop_keep_prob', 1.0, 'The dropout keep probability')
 flags.DEFINE_float('l2', 0.0, 'L2 regularisation strength')
-flags.DEFINE_integer('batch_size', 64, 'Batch size')
+flags.DEFINE_integer('batch_size', 16, 'Batch size')
 flags.DEFINE_integer('replay_buffer_size', 1000000, 'Number of timesteps to store in the replay buffer')
-flags.DEFINE_float('gamma', 0.05, 'Discount parameter for TD learning')
+flags.DEFINE_float('gamma', 0.99, 'Discount parameter for TD learning')
 flags.DEFINE_float('epsilon', 0.05, 'Exploration parameter for epsilon greedy exploration')
 
 # Environment configuration
