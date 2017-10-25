@@ -44,6 +44,8 @@ class BaseAgent(object):
         self.replay_buffer_size = self.config['replay_buffer_size']
         self.gamma = self.config['gamma']
         self.epsilon = self.config['epsilon']
+        self.update_target_every = self.config['update_target_every']
+        self.double_q = self.config['double_q']
 
         #  Other initialisations
         self.env_steps = 0

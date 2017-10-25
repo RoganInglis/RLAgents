@@ -30,22 +30,22 @@ class DQNAgent(BaseAgent):
             observation_placeholder_shape = [None]
             observation_placeholder_shape.extend(self.env.observation_space.shape)
 
-            self.placeholders = {'observation_t': tf.placeholder('float', observation_placeholder_shape),
-                                 'action_t': tf.placeholder(tf.int32, [None]),
-                                 'observation_t_1': tf.placeholder('float', observation_placeholder_shape),
-                                 'reward_t_1': tf.placeholder('float', [None]),
-                                 'done': tf.placeholder('float', [None])}
+            self.placeholders = {'observation_t': tf.placeholder('float', observation_placeholder_shape,
+                                                                 name='observation_t'),
+                                 'action_t': tf.placeholder(tf.int32, [None], name='action_t'),
+                                 'observation_t_1': tf.placeholder('float', observation_placeholder_shape,
+                                                                   name='observation_t_1'),
+                                 'reward_t_1': tf.placeholder('float', [None], name='reward_t_1'),
+                                 'done': tf.placeholder('float', [None], name='done')}
 
-            # Create Q t net
-            q_t = value_networks.multi_layer_perceptron(self.placeholders['observation_t'],
-                                                        [10, 5, self.env.action_space.n])  # TODO - need to deal with parameter sharing between q_t and q_t_1
-            tf.summary.histogram('q_t', q_t)
+            # Create Q nets
+            q_func = value_networks.multi_layer_perceptron
+            q_func_args_list = [[self.placeholders['observation_t'], [100, self.env.action_space.n]],
+                                [self.placeholders['observation_t_1'], [100, self.env.action_space.n]]]
 
-            # Create Q t + 1 net
-            q_t_1 = value_networks.multi_layer_perceptron(self.placeholders['observation_t'],
-                                                          [10, 5, self.env.action_space.n],
-                                                          reuse=True)
-            tf.summary.histogram('q_t_1', q_t_1)
+            q_t, q_t_1, self.target_update_op, q_t_1_d = value_networks.build_q_nets(q_func,
+                                                                                     q_func_args_list,
+                                                                                     double_q=self.double_q)
 
             # Create op to get action based on observation t
             self.action = tf.argmax(q_t, axis=1)
@@ -56,8 +56,13 @@ class DQNAgent(BaseAgent):
                                                 q_t,
                                                 q_t_1,
                                                 self.placeholders['action_t'],
-                                                self.placeholders['done'], debug_tb_ops=True)
+                                                self.placeholders['done'],
+                                                double_q=self.double_q,
+                                                q_t_1_d=q_t_1_d)
             tf.summary.scalar('Loss', self.loss)
+
+            if self.l2 != 0.0:
+                self.loss = self.loss + tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'q_net_1' not in v.name]) * self.l2
 
             optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
             self.train_op = optimiser.minimize(self.loss)
@@ -97,7 +102,12 @@ class DQNAgent(BaseAgent):
                 feed_dict = self.replayBuffer.get_batch_feed_dict(self.batch_size, self.placeholders)
 
                 # Update parameters
-                _, train_summary = self.sess.run([self.train_op, self.train_summary], feed_dict=feed_dict)
+                if self.train_iter % self.update_target_every == 0:
+                    _, _, train_summary = self.sess.run([self.train_op,
+                                                         self.target_update_op,
+                                                         self.train_summary], feed_dict=feed_dict)
+                else:
+                    _, train_summary = self.sess.run([self.train_op, self.train_summary], feed_dict=feed_dict)
 
                 # Perform Tensorboard operations
                 self.train_summary_writer.add_summary(train_summary, self.env_steps)

@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 
 class ExperienceReplayBuffer:
@@ -84,6 +85,21 @@ class ExperienceReplayBuffer:
                      placeholders_dict['done']: done}
 
         return feed_dict
+
+
+def preprocess_atari(atari_observation):
+    # Convert to greyscale
+    greyscale_observation = cv2.cvtColor(atari_observation, cv2.COLOR_BGR2GRAY)
+
+    # Crop?
+    cropped_observation = greyscale_observation[0:-1, 0:-1]
+
+    # Resize
+    resized_observation = cv2.resize(cropped_observation, (110, 84))
+
+    # Convert to correct dims array
+    preprocessed_atari_observation = np.expand_dims(np.expand_dims(resized_observation, 0), 3)  # TODO - Double check all these expend dims are correct
+    return preprocessed_atari_observation
 
 
 if __name__ == '__main__':

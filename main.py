@@ -3,6 +3,7 @@ import json
 import time
 import tensorflow as tf
 import numpy as np
+from agents import value_networks
 
 # See the __init__ script in the models folder
 # `make_model` is a helper function to load any models you have
@@ -28,13 +29,15 @@ flags.DEFINE_string('fixed_params', "{}", 'JSON inputs to fix some params in a H
 # Model configuration
 flags.DEFINE_string('agent_name', 'DQNAgent', 'Unique name of the agent')
 flags.DEFINE_boolean('best', False, 'Force to use the best known configuration')
-flags.DEFINE_float('learning_rate', 1e-3, 'The learning rate of SGD')
+flags.DEFINE_float('learning_rate', 1e-2, 'The learning rate of SGD')
 flags.DEFINE_float('drop_keep_prob', 1.0, 'The dropout keep probability')
 flags.DEFINE_float('l2', 0.0, 'L2 regularisation strength')
-flags.DEFINE_integer('batch_size', 16, 'Batch size')
+flags.DEFINE_integer('batch_size', 64, 'Batch size')
 flags.DEFINE_integer('replay_buffer_size', 1000000, 'Number of timesteps to store in the replay buffer')
 flags.DEFINE_float('gamma', 0.99, 'Discount parameter for TD learning')
 flags.DEFINE_float('epsilon', 0.05, 'Exploration parameter for epsilon greedy exploration')
+flags.DEFINE_integer('update_target_every', 100, 'Frequency at which to update the target q network')
+flags.DEFINE_boolean('double_q', True, 'Use double Q learning')
 
 # Environment configuration
 flags.DEFINE_string('env', 'CartPole-v0', 'Name of the gym environment to use')
@@ -47,7 +50,7 @@ flags.DEFINE_boolean('test', False, 'Load a model and compute test performance')
 flags.DEFINE_integer('test_episodes', 100, 'Number of episodes over which to compute test results')
 flags.DEFINE_integer('test_every', 10, 'Episode interval at which to test the agent during training')
 flags.DEFINE_integer('render_test_every', 100, 'Episode interval at which to render the environment during testing')
-flags.DEFINE_integer('render_every', 50, 'Episode interval at which to render the environment during training')
+flags.DEFINE_integer('render_every', 500000, 'Episode interval at which to render the environment during training')
 
 # This is very important for TensorBoard
 # each model will end up in its own unique folder using time module
@@ -66,6 +69,7 @@ flags.DEFINE_integer('random_seed', np.random.randint(0, 2**8), 'Value of random
 
 def main(_):
     config = flags.FLAGS.__flags.copy()
+
     # fixed_params must be a string to be passed in the shell, let's use JSON
     config["fixed_params"] = json.loads(config["fixed_params"])
 
