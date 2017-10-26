@@ -6,6 +6,8 @@ def build_q_nets(q_func, q_func_args_list, scope='q_net', double_q=False):
     q_t, q_t_vars = q_func(*q_func_args_list[0], scope=scope)
     q_t_1, q_t_1_vars = q_func(*q_func_args_list[1], scope=scope + '_1')
 
+    # If using double q learning we need an additional network for Qt+1 that shares the same parameters as the Qt net
+    # but takes observation t+1 as input rather then observation t
     if double_q:
         q_t_1_d, _ = q_func(*q_func_args_list[1], scope=scope, reuse=True)
     else:
@@ -17,7 +19,7 @@ def build_q_nets(q_func, q_func_args_list, scope='q_net', double_q=False):
     tf.summary.scalar('mean_max_q_t', tf.reduce_mean(tf.reduce_max(q_t, axis=1), axis=0))
     tf.summary.scalar('mean_max_q_t_1', tf.reduce_mean(tf.reduce_max(q_t_1, axis=1), axis=0))
 
-    # Add update ops and group to allow copying of copying of online net variables to target net
+    # Add update ops and group to allow copying of online net variables to target net
     assign_ops = []
     with tf.name_scope('target_update_ops'):
         for q_t_var, q_t_1_var in zip(q_t_vars, q_t_1_vars):
@@ -46,8 +48,36 @@ def multi_layer_perceptron(input_tensor, neurons_per_layer, activations=tf.nn.re
         return x, net_scope.trainable_variables()
 
 
+def dqn_atari_conv_net(input_tensor, n_actions, scope='atari_conv_net', reuse=None, padding='valid'):
+    with tf.variable_scope(scope, reuse=reuse) as net_scope:
+        x = tf.layers.conv2d(input_tensor, 32, 8, 4, padding, activation=tf.nn.relu, name='conv_1', reuse=reuse)
+        x = tf.layers.conv2d(x, 64, 4, 2, padding, activation=tf.nn.relu, name='conv_2', reuse=reuse)
+        x = tf.layers.conv2d(x, 64, 3, 1, padding, activation=tf.nn.relu, name='conv_3', reuse=reuse)
+        x = tf.layers.dense(tf.contrib.layers.flatten(x), 512, tf.nn.relu, name='dense_1', reuse=reuse)
+        x = tf.layers.dense(x, n_actions, name='dense_2', reuse=reuse)
+
+        return x, net_scope.trainable_variables()
+
+
+def conv_out_size(input_shape, padding, kernel_shape, strides):
+    # Convert int kernel shape and strides to 2d if required
+    if type(kernel_shape) is int:
+        kernel_shape = [kernel_shape, kernel_shape]
+    if type(strides) is int:
+        strides = [strides, strides]
+
+    if padding == 'same':
+        p = [(kernel_shape[0] - 1)/2, (kernel_shape[0] - 1)/2]
+    else:
+        p = [0, 0]
+
+    out_size = [int((input_shape[0] + 2*p[0] - kernel_shape[0])/strides[0]),
+                int((input_shape[1] + 2*p[1] - kernel_shape[1])/strides[1])]
+    return out_size
+
+
 if __name__ == '__main__':
-    x = tf.placeholder('float', [None, 10])
+    x = tf.placeholder('float', [None, 84, 84, 4])
     y1 = multi_layer_perceptron(x, [100, 80, 60, 40, 20])
     y2 = multi_layer_perceptron(x, [100, 80, 60, 40, 20], reuse=True)
 

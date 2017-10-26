@@ -39,9 +39,9 @@ class DQNAgent(BaseAgent):
                                  'done': tf.placeholder('float', [None], name='done')}
 
             # Create Q nets
-            q_func = value_networks.multi_layer_perceptron
-            q_func_args_list = [[self.placeholders['observation_t'], [100, self.env.action_space.n]],
-                                [self.placeholders['observation_t_1'], [100, self.env.action_space.n]]]
+            q_func = value_networks.dqn_atari_conv_net
+            q_func_args_list = [[self.placeholders['observation_t'], self.env.action_space.n],
+                                [self.placeholders['observation_t_1'], self.env.action_space.n]]
 
             q_t, q_t_1, self.target_update_op, q_t_1_d = value_networks.build_q_nets(q_func,
                                                                                      q_func_args_list,
@@ -64,7 +64,7 @@ class DQNAgent(BaseAgent):
             if self.l2 != 0.0:
                 self.loss = self.loss + tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'q_net_1' not in v.name]) * self.l2
 
-            optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
+            optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, momentum=self.momentum)
             self.train_op = optimiser.minimize(self.loss)
 
             self.train_summary = tf.summary.merge_all()
@@ -102,19 +102,21 @@ class DQNAgent(BaseAgent):
                 feed_dict = self.replayBuffer.get_batch_feed_dict(self.batch_size, self.placeholders)
 
                 # Update parameters
+                ops = [self.train_op]
                 if self.train_iter % self.update_target_every == 0:
-                    _, _, train_summary = self.sess.run([self.train_op,
-                                                         self.target_update_op,
-                                                         self.train_summary], feed_dict=feed_dict)
-                else:
-                    _, train_summary = self.sess.run([self.train_op, self.train_summary], feed_dict=feed_dict)
+                    ops.append(self.target_update_op)
+                if self.env_steps % self.summary_every == 0:
+                    ops.append(self.train_summary)
+                train_out = self.sess.run(ops, feed_dict=feed_dict)
 
                 # Perform Tensorboard operations
-                self.train_summary_writer.add_summary(train_summary, self.env_steps)
+                if self.env_steps % self.summary_every == 0:
+                    self.train_summary_writer.add_summary(train_out[-1], self.env_steps)
 
                 self.train_iter += 1
 
             self.env_steps += 1
+            self.decay_epsilon()
 
             # Set next observation to current observation for next iteration
             observation_t = observation_t_1
@@ -135,3 +137,9 @@ class DQNAgent(BaseAgent):
         # Initialise experience replay buffer
         state_shape = self.env.observation_space.shape
         self.replayBuffer = utils.ExperienceReplayBuffer(self.replay_buffer_size, state_shape)
+        self.replayBuffer.fill_with_random_experience(self.replay_buffer_init_fill, self.env)
+
+    def decay_epsilon(self):
+        if self.env_steps < self.final_exploration_frame:
+            self.epsilon = self.epsilon_gradient*self.env_steps + self.epsilon_init
+

@@ -1,22 +1,23 @@
 import numpy as np
 import cv2
+import gym
 
 
 class ExperienceReplayBuffer:
     # TODO comment
-    def __init__(self, size, observation_shape):
+    def __init__(self, size, observation_shape, observation_dtype=np.uint8):
         self.size = size
 
         # Make sure shape is list
-        observation_shape = list(observation_shape)
+        self.observation_shape = list(observation_shape)
 
         # Get replay shapes
-        observation_shape.insert(0, size)
+        self.observation_shape.insert(0, size)
 
         # Initialise experience with zeros TODO - May be better to store action as 1 hot bool or small int array?
-        self.experience = {'observation_t': np.zeros(observation_shape),
+        self.experience = {'observation_t': np.zeros(self.observation_shape, dtype=observation_dtype),
                            'action_t': np.zeros(size),
-                           'observation_t_1': np.zeros(observation_shape),
+                           'observation_t_1': np.zeros(self.observation_shape, dtype=observation_dtype),
                            'reward_t_1': np.zeros(size),
                            'done': np.zeros(size)}
 
@@ -86,6 +87,127 @@ class ExperienceReplayBuffer:
 
         return feed_dict
 
+    def fill_with_random_experience(self, n_to_fill, env):
+        # Deal with the fact that observations from sequential timesteps may need to be stacked
+        observation_t = env.reset()
+
+        # Initialise number filled counter
+        n = 0
+        while n < n_to_fill:
+            observation_t = env.reset()
+            done = False
+
+            # Run environment for one episode
+            while n < n_to_fill and not done:
+                action_t = env.action_space.sample()
+                observation_t_1, reward_t_1, done, _ = env.step(action_t)
+
+                self.add(observation_t, action_t, observation_t_1, reward_t_1, done)
+
+                observation_t = observation_t_1
+                n += 1
+
+
+class FrameBuffer:
+    def __init__(self, observation_shape, observations_to_stack):
+        self._args = (observation_shape, observations_to_stack)
+        self.shape = list(observation_shape)
+        self.shape.append(observations_to_stack)
+
+        # Initialise numpy array to hold stacked frames
+        self.frames = np.zeros(self.shape)
+
+        self.retrieve_indices = np.arange(observations_to_stack)
+
+    def add(self, observation):
+        # Roll indices
+        self.retrieve_indices = np.roll(self.retrieve_indices, -1)
+
+        # Add frame in correct location (using indices to avoid having to copy and rewrite the entire array by rolling)
+        self.frames[:, :, self.retrieve_indices[-1]] = observation
+
+    def get(self):
+        return self.frames[:, :, self.retrieve_indices]
+
+    def add_get(self, observation):
+        # Add observation to buffer and then return current buffer
+        self.add(observation)
+        return self.get()
+
+    def reset(self):
+        self.__init__(*self._args)
+
+
+class EnvWrapper(gym.Wrapper):
+    """
+    Wrapper to allow environment to directly output a preprocessed set of stacked consecutive frames
+    Will allow the agent code to stay as general as possible
+    """
+    def __init__(self, env, preprocessor_func=None, frames_to_stack=1, repeat_count=1, clip_rewards=False):
+        super(EnvWrapper, self).__init__(env)
+        self.preprocessor_func = preprocessor_func
+        self.frames_to_stack = frames_to_stack
+        self.use_frame_buffer = self.frames_to_stack > 1
+        self.repeat_count = repeat_count
+        self.clip_rewards = clip_rewards
+
+        # Get processed observation shape and update observation_space.shape
+        if self.preprocessor_func is None:
+            observation_shape = self.observation_space.shape
+        else:
+            test_observation = self.env.reset()
+            test_observation = self.preprocessor_func(test_observation.astype(np.uint8))
+            observation_shape = test_observation.shape
+            if frames_to_stack > 1:
+                observation_space_shape = (*observation_shape, frames_to_stack)
+            else:
+                observation_space_shape = observation_shape
+
+        if type(self.observation_space) == gym.spaces.Box:
+            self.observation_space = gym.spaces.Box(0, 255, observation_space_shape)
+        else:
+            raise Exception('The selected environment\'s observation space is not of type Box. Other types are not yet supported by the environment wrapper currently in use' )
+
+
+        self.frame_buffer = FrameBuffer(observation_shape, frames_to_stack)
+
+    def _step(self, action):
+        done = False
+        total_reward = 0
+        current_step = 0
+        while current_step < (self.repeat_count + 1) and not done:
+            observation, reward, done, info = self.env.step(action)
+            if self.preprocessor_func is not None:
+                observation = self.preprocessor_func(observation.astype(np.uint8))
+
+            if self.use_frame_buffer:
+                self.frame_buffer.add(observation)
+
+            if self.clip_rewards:
+                if reward > 0:
+                    reward = 1
+                elif reward < 0:
+                    reward = -1
+
+            total_reward += reward
+            current_step += 1
+
+            observation = self.frame_buffer.get()
+
+        return observation.astype(np.uint8), total_reward, done, info
+
+    def _reset(self):
+        observation = self.env.reset()
+
+        if self.preprocessor_func is not None:
+            observation = self.preprocessor_func(observation)
+
+        if self.use_frame_buffer:
+            self.frame_buffer.reset()
+            observation = self.frame_buffer.add_get(observation)
+
+        return observation.astype(np.uint8)
+
 
 def preprocess_atari(atari_observation):
     # Convert to greyscale
@@ -95,10 +217,10 @@ def preprocess_atari(atari_observation):
     cropped_observation = greyscale_observation[0:-1, 0:-1]
 
     # Resize
-    resized_observation = cv2.resize(cropped_observation, (110, 84))
+    resized_observation = cv2.resize(cropped_observation, (84, 110))
 
     # Convert to correct dims array
-    preprocessed_atari_observation = np.expand_dims(np.expand_dims(resized_observation, 0), 3)  # TODO - Double check all these expend dims are correct
+    preprocessed_atari_observation = resized_observation
     return preprocessed_atari_observation
 
 

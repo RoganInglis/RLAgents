@@ -46,13 +46,30 @@ class BaseAgent(object):
         self.epsilon = self.config['epsilon']
         self.update_target_every = self.config['update_target_every']
         self.double_q = self.config['double_q']
+        self.replay_buffer_init_fill = self.config['replay_buffer_init_fill']
+        self.frames_to_stack = self.config['frames_to_stack']
+        self.repeat_count = self.config['repeat_count']
+        self.final_exploration_frame = self.config['final_exploration_frame']
+        self.epsilon_final = self.config['epsilon_final']
+        self.momentum = self.config['momentum']
+        self.summary_every = self.config['summary_every']
+        self.clip_rewards = self.config['clip_rewards']
+
+        self.epsilon_gradient = (self.epsilon - self.epsilon_final)/(-self.final_exploration_frame)
+        self.epsilon_init = self.epsilon
 
         #  Other initialisations
         self.env_steps = 0
         self.train_iter = 0
 
         # Create environment
-        self.env = gym.make(self.config['env'])
+        self.preprocess_func = utils.preprocess_atari  # TODO - Specific function not compatible with cartpole
+        env = gym.make(self.config['env'])
+        self.env = utils.EnvWrapper(env,
+                                    preprocessor_func=self.preprocess_func,
+                                    frames_to_stack=self.frames_to_stack,
+                                    repeat_count=self.repeat_count,
+                                    clip_rewards=self.clip_rewards)
 
         # Now the child Model needs some custom parameters, to avoid any
         # inheritance hell with the __init__ function, the model
