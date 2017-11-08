@@ -29,4 +29,7 @@ def one_step_td_loss(reward_t_1, gamma, q_t, q_t_1, action_t, done, double_q=Fal
 
         # Compute mean Huber loss for batch
         loss = tf.losses.huber_loss(value_target, value_estimate)
-    return loss
+
+        # Compute TD error for prioritised replay
+        td_error = tf.abs(value_target - value_estimate)
+    return loss, td_error

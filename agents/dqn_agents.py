@@ -51,18 +51,19 @@ class DQNAgent(BaseAgent):
             self.action = tf.argmax(q_t, axis=1)
             tf.summary.histogram('action', self.action)
 
-            self.loss = losses.one_step_td_loss(self.placeholders['reward_t_1'],
-                                                self.gamma,
-                                                q_t,
-                                                q_t_1,
-                                                self.placeholders['action_t'],
-                                                self.placeholders['done'],
-                                                double_q=self.double_q,
-                                                q_t_1_d=q_t_1_d)
-            tf.summary.scalar('Loss', self.loss)
+            self.loss, self.td_error = losses.one_step_td_loss(self.placeholders['reward_t_1'],
+                                                               self.gamma,
+                                                               q_t,
+                                                               q_t_1,
+                                                               self.placeholders['action_t'],
+                                                               self.placeholders['done'],
+                                                               double_q=self.double_q,
+                                                               q_t_1_d=q_t_1_d)
 
             if self.l2 != 0.0:
                 self.loss = self.loss + tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'q_net_1' not in v.name]) * self.l2
+
+            tf.summary.scalar('Loss', self.loss)
 
             optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, momentum=self.momentum)
             self.train_op = optimiser.minimize(self.loss)

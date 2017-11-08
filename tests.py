@@ -4,7 +4,7 @@ import numpy as np
 from agents import value_networks
 from agents import utils
 import gym
-import matplotlib.pyplot as plt
+import time
 
 
 def test_out(pass_condition, name):
@@ -197,6 +197,129 @@ def env_wrapper_test():
         observation_t = observation_t_1
 
 
+class TestEnv:
+    def __init__(self, min_episode_steps=1, max_episode_steps=5):
+        self.min_episode_steps = min_episode_steps
+        self.max_episode_steps = max_episode_steps
+        self.episode_step = 0
+        self.total_step = 0
+        self.done = False
+        self.episode_length = np.random.randint(self.min_episode_steps, self.max_episode_steps + 1)
+        self.action_space = TestActionSpace(self.episode_step)
+
+    def step(self, action):
+        # Increment to next episode step
+        self.episode_step += 1
+        self.total_step += 1
+        self.action_space.episode_step = self.total_step
+
+        # Set observation and reward as episode step
+        observation = reward = self.total_step
+
+        # Check whether the episode is complete
+        if self.episode_step == self.episode_length:
+            self.done = True
+
+        info = None
+        return observation, reward, self.done, info
+
+    def reset(self):
+        self.episode_step = 0
+        if self.total_step is not 0:
+            self.total_step += 1
+        self.action_space.episode_step = self.total_step
+        self.done = False
+        self.episode_length = np.random.randint(self.min_episode_steps, self.max_episode_steps + 1)
+
+        observation = self.total_step
+        return observation
+
+
+class TestActionSpace:
+    def __init__(self, init_episode_step=0):
+        self.episode_step = init_episode_step
+
+    def sample(self):
+        return self.episode_step
+
+
+def test_env_test():
+    env = TestEnv(1, 5)
+    n_episodes = 3
+
+    for episode in range(n_episodes):
+        observation_t = env.reset()
+        action = 0
+        done = False
+
+        while not done:
+            observation_t_1, reward_t_1, done, _ = env.step(action)
+
+            print("o_t: {}, a_t: {}, o_t_1: {}, r_t_1: {}, done: {}".format(observation_t,
+                                                                            action,
+                                                                            observation_t_1,
+                                                                            reward_t_1,
+                                                                            done))
+
+            observation_t = observation_t_1
+            action += 1
+
+
+def new_experience_replay_buffer_test():
+    replayBuffer = utils.ExperienceReplayBufferM(10, [])
+    env = TestEnv()
+
+    replayBuffer.fill_with_random_experience(20, env)
+
+    print_batch(*replayBuffer.get_batch(32))
+    print('test')
+
+
+def new_experience_replay_buffer_timing_test():
+    replayBufferM = utils.ExperienceReplayBufferM(10, [])
+    replayBuffer = utils.ExperienceReplayBuffer(10, [])
+    envM = TestEnv()
+    env = TestEnv()
+
+    n_repeats = 100
+
+    time_m = time_add_to_replay_buffer(envM, replayBufferM, n_repeats)
+    time = time_add_to_replay_buffer(env, replayBuffer, n_repeats)
+
+    print("BufferM add time: {}s, Buffer old add time: {}s".format(time_m, time))
+
+
+def time_add_to_replay_buffer(env, replayBuffer, n_repeats):
+    n_added = 0
+    times = np.array([])
+    while n_added < n_repeats:
+        observation_t = env.reset()
+        done = False
+        while not done and (n_added < n_repeats):
+            action_t = env.action_space.sample()
+            observation_t_1, reward_t_1, done, _ = env.step(action_t)
+
+            start_time = time.time()
+            replayBuffer.add(observation_t, action_t, observation_t_1, reward_t_1, done)
+            times = np.append(times, time.time() - start_time)
+
+            n_added += 1
+            observation_t = observation_t_1
+
+    mean_time = np.mean(times)
+    return mean_time
+
+
+def print_batch(observation_t, action_t, observation_t_1, reward_t_1, done):
+    for index in range(observation_t.size):
+        print("o_t: {}, a_t: {}, o_t_1: {}, r_t_1: {}, done: {},  o_t_1 - o_t: {}".format(observation_t[index],
+                                                                                         action_t[index],
+                                                                                         observation_t_1[index],
+                                                                                         reward_t_1[index],
+                                                                                         done[index],
+                                                                                         observation_t_1[index] - observation_t[index]))
+
+
 if __name__=='__main__':
     # one_step_td_loss_test()
     get_scope_variables_test()
@@ -205,4 +328,7 @@ if __name__=='__main__':
     # dqn_atari_conv_net_test()
     #frame_buffer_test()
     #experience_replay_buffer_test()
-    env_wrapper_test()
+    #env_wrapper_test()
+    #test_env_test()
+    new_experience_replay_buffer_test()
+    new_experience_replay_buffer_timing_test()

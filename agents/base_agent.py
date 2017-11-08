@@ -54,6 +54,7 @@ class BaseAgent(object):
         self.momentum = self.config['momentum']
         self.summary_every = self.config['summary_every']
         self.clip_rewards = self.config['clip_rewards']
+        self.save_every = config['save_every']
 
         self.epsilon_gradient = (self.epsilon - self.epsilon_final)/(-self.final_exploration_frame)
         self.epsilon_init = self.epsilon
@@ -82,7 +83,7 @@ class BaseAgent(object):
         # Any operations that should be in the graph but are common to all models
         # can be added this way, here
         with self.graph.as_default():
-            self.saver = tf.train.Saver(max_to_keep=50)
+            self.saver = tf.train.Saver(max_to_keep=10)
             self.init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
 
             # Add test summary ops
@@ -172,7 +173,7 @@ class BaseAgent(object):
         # I like to separate the function to train per epoch and the function to train globally
         raise Exception('The learn_from_epoch function must be overridden by the agent')
 
-    def train(self, save_every=1):
+    def train(self):
         # This function is usually common to all your models
         for self.episode_id in range(0, self.max_train_episodes):
             if self.episode_id % self.render_every == 0:
@@ -192,7 +193,7 @@ class BaseAgent(object):
             self.learn_from_episode(render=render)
 
             # If you don't want to save during training, you can just pass a negative number
-            if save_every > 0 and self.episode_id % save_every == 0:
+            if self.save_every > 0 and self.episode_id % self.save_every == 0:
                 self.save()
 
     def save(self):

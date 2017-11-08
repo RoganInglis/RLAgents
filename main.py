@@ -48,18 +48,19 @@ flags.DEFINE_boolean('clip_rewards', True, 'Clip_rewards to be -1, 0, 1')
 
 
 # Environment configuration
-flags.DEFINE_string('env', 'MsPacman-v0', 'Name of the gym environment to use')
+flags.DEFINE_string('env', 'Breakout-v0', 'Name of the gym environment to use')
 
 # Training configuration
 flags.DEFINE_boolean('debug', False, 'Debug mode')
 flags.DEFINE_integer('max_iter', 100000000, 'Max number of training iterations')
 flags.DEFINE_integer('max_train_episodes', 100000, 'Max number of training episodes')
 flags.DEFINE_boolean('test', False, 'Load a model and compute test performance')
-flags.DEFINE_integer('test_episodes', 50, 'Number of episodes over which to compute test results')
-flags.DEFINE_integer('test_every', 50, 'Episode interval at which to test the agent during training')
+flags.DEFINE_integer('test_episodes', 10, 'Number of episodes over which to compute test results')
+flags.DEFINE_integer('test_every', 70, 'Episode interval at which to test the agent during training')
 flags.DEFINE_integer('render_test_every', 10000, 'Episode interval at which to render the environment during testing')
 flags.DEFINE_integer('render_every', 500000, 'Episode interval at which to render the environment during training')
 flags.DEFINE_integer('summary_every', 50, 'Interval at which to record a summary to tensorboard')
+flags.DEFINE_integer('save_every', 10, 'Episode interval at which to save the model')
 
 # This is very important for TensorBoard
 # each model will end up in its own unique folder using time module
