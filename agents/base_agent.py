@@ -46,6 +46,8 @@ class BaseAgent(object):
         self.epsilon = self.config['epsilon']
         self.update_target_every = self.config['update_target_every']
         self.double_q = self.config['double_q']
+        self.prioritised_replay = self.config['prioritised_replay']
+        self.alpha = self.config['alpha']
         self.replay_buffer_init_fill = self.config['replay_buffer_init_fill']
         self.frames_to_stack = self.config['frames_to_stack']
         self.repeat_count = self.config['repeat_count']

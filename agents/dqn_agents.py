@@ -7,6 +7,9 @@ from agents import value_networks
 
 
 class DQNAgent(BaseAgent):
+    """
+    This agent is an implementation of the DQN algorithm
+    """
     def set_model_props(self, config):
         # This function is here to be overridden completely.
         # When you look at your model, you want to know exactly which custom options it needs.
@@ -51,14 +54,17 @@ class DQNAgent(BaseAgent):
             self.action = tf.argmax(q_t, axis=1)
             tf.summary.histogram('action', self.action)
 
-            self.loss, self.td_error = losses.one_step_td_loss(self.placeholders['reward_t_1'],
-                                                               self.gamma,
-                                                               q_t,
-                                                               q_t_1,
-                                                               self.placeholders['action_t'],
-                                                               self.placeholders['done'],
-                                                               double_q=self.double_q,
-                                                               q_t_1_d=q_t_1_d)
+            # TODO - implement optional use of importance sampling correction for prioritised replay in loss function
+            self.loss, td_error = losses.one_step_td_loss(self.placeholders['reward_t_1'],
+                                                          self.gamma,
+                                                          q_t,
+                                                          q_t_1,
+                                                          self.placeholders['action_t'],
+                                                          self.placeholders['done'],
+                                                          double_q=self.double_q,
+                                                          q_t_1_d=q_t_1_d)
+
+            self.abs_td_error = tf.abs(td_error)
 
             if self.l2 != 0.0:
                 self.loss = self.loss + tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'q_net_1' not in v.name]) * self.l2
@@ -104,11 +110,17 @@ class DQNAgent(BaseAgent):
 
                 # Update parameters
                 ops = [self.train_op]
+                if self.prioritised_replay:
+                    ops.append(self.abs_td_error)
                 if self.train_iter % self.update_target_every == 0:
                     ops.append(self.target_update_op)
                 if self.env_steps % self.summary_every == 0:
                     ops.append(self.train_summary)
                 train_out = self.sess.run(ops, feed_dict=feed_dict)
+
+                # If using prioritised replay we need to update the sampling probabilities now
+                if self.prioritised_replay:
+                    self.replayBuffer.update_priorities(train_out[1])
 
                 # Perform Tensorboard operations
                 if self.env_steps % self.summary_every == 0:
@@ -137,7 +149,12 @@ class DQNAgent(BaseAgent):
 
         # Initialise experience replay buffer
         state_shape = self.env.observation_space.shape
-        self.replayBuffer = utils.ExperienceReplayBuffer(self.replay_buffer_size, state_shape)
+        if self.prioritised_replay:
+            self.replayBuffer = utils.PrioritisedExperienceReplayBufferM(self.replay_buffer_size, state_shape,
+                                                                         alpha=self.alpha, reward_dtype=np.float32)
+        else:
+            self.replayBuffer = utils.ExperienceReplayBufferM(self.replay_buffer_size, state_shape,
+                                                              reward_dtype=np.float32)
         self.replayBuffer.fill_with_random_experience(self.replay_buffer_init_fill, self.env)
 
     def decay_epsilon(self):

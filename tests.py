@@ -5,6 +5,7 @@ from agents import value_networks
 from agents import utils
 import gym
 import time
+from pympler import asizeof
 
 
 def test_out(pass_condition, name):
@@ -53,9 +54,9 @@ def one_step_td_loss_test():
                  action_t: action_t_val,
                  done: done_val}
 
-    masked_max_q = (1.0 - done_val)*np.max(q_t_1_val, axis=1)
+    masked_max_q = (1.0 - done_val) * np.max(q_t_1_val, axis=1)
 
-    q_target_val = reward_t_1_val + gamma*masked_max_q
+    q_target_val = reward_t_1_val + gamma * masked_max_q
     q_estimate_val = q_t_val[np.arange(batch_size), action_t_val]
 
     q_feed_dict = {q_target: q_target_val,
@@ -88,7 +89,7 @@ def function_pass_to_function_test():
         if add:
             return x + y
         else:
-            return x*y
+            return x * y
 
     def function_to_pass_to(func, args):
         return func(*args, False)
@@ -99,7 +100,7 @@ def function_pass_to_function_test():
 
     z = function_to_pass_to(function_to_pass, args)
 
-    return test_out(z == x*y, 'function_pass_to_function_test')
+    return test_out(z == x * y, 'function_pass_to_function_test')
 
 
 def conv_out_size_test():
@@ -109,7 +110,7 @@ def conv_out_size_test():
     strides = 4
     out_shape = value_networks.conv_out_size(input_shape, padding, kernel_shape, strides)
 
-    true_out_shape = [int((84 + 7 - 8)/4), int((84 + 7 - 8)/4)]
+    true_out_shape = [int((84 + 7 - 8) / 4), int((84 + 7 - 8) / 4)]
 
     return test_out(out_shape == true_out_shape, 'conv_out_size_test')
 
@@ -158,7 +159,6 @@ def frame_buffer_test():
 
 
 def experience_replay_buffer_test():
-
     # Create experience replay buffer
     env = gym.make('MsPacman-v0')
     obs = env.reset()
@@ -198,7 +198,7 @@ def env_wrapper_test():
 
 
 class TestEnv:
-    def __init__(self, min_episode_steps=1, max_episode_steps=5):
+    def __init__(self, min_episode_steps=1, max_episode_steps=5, observation_shape=None, observation_dtype=np.uint8):
         self.min_episode_steps = min_episode_steps
         self.max_episode_steps = max_episode_steps
         self.episode_step = 0
@@ -206,6 +206,8 @@ class TestEnv:
         self.done = False
         self.episode_length = np.random.randint(self.min_episode_steps, self.max_episode_steps + 1)
         self.action_space = TestActionSpace(self.episode_step)
+        self.observation_shape = observation_shape
+        self.observation_dtype = observation_dtype
 
     def step(self, action):
         # Increment to next episode step
@@ -214,7 +216,11 @@ class TestEnv:
         self.action_space.episode_step = self.total_step
 
         # Set observation and reward as episode step
-        observation = reward = self.total_step
+        reward = self.total_step
+        if self.observation_shape is None:
+            observation = self.total_step
+        else:
+            observation = np.zeros(self.observation_shape, self.observation_dtype)
 
         # Check whether the episode is complete
         if self.episode_step == self.episode_length:
@@ -231,7 +237,10 @@ class TestEnv:
         self.done = False
         self.episode_length = np.random.randint(self.min_episode_steps, self.max_episode_steps + 1)
 
-        observation = self.total_step
+        if self.observation_shape is None:
+            observation = self.total_step
+        else:
+            observation = np.zeros(self.observation_shape, self.observation_dtype)
         return observation
 
 
@@ -266,27 +275,49 @@ def test_env_test():
 
 
 def new_experience_replay_buffer_test():
-    replayBuffer = utils.ExperienceReplayBufferM(10, [])
+    replayBuffer = utils.ExperienceReplayBufferM(100, [], observation_dtype=np.int32,
+                                                 action_dtype=np.int32, reward_dtype=np.int32)
     env = TestEnv()
 
-    replayBuffer.fill_with_random_experience(20, env)
+    replayBuffer.fill_with_random_experience(2000, env)
 
     print_batch(*replayBuffer.get_batch(32))
     print('test')
 
 
+def print_batch(observation_t, action_t, observation_t_1, reward_t_1, done):
+    for index in range(observation_t.size):
+        print("o_t: {}, a_t: {}, o_t_1: {}, r_t_1: {}, done: {},  Correct numbers: {}".format(
+            observation_t[index],
+            action_t[index],
+            observation_t_1[index],
+            reward_t_1[index],
+            done[index],
+            (observation_t[index] == action_t[index]) and (observation_t_1[index] == reward_t_1[index]) and (observation_t_1[index] - observation_t[index] == 1)))
+
+
 def new_experience_replay_buffer_timing_test():
-    replayBufferM = utils.ExperienceReplayBufferM(10, [])
-    replayBuffer = utils.ExperienceReplayBuffer(10, [])
-    envM = TestEnv()
-    env = TestEnv()
+    observation_shape = [84, 84, 4]
+    replayBufferM = utils.ExperienceReplayBufferM(100, observation_shape, reward_dtype=np.int32, action_dtype=np.int32)
+    replayBuffer = utils.ExperienceReplayBuffer(100, observation_shape)
+    envM = TestEnv(observation_shape=observation_shape)
+    env = TestEnv(observation_shape=observation_shape)
 
-    n_repeats = 100
+    n_repeats = 10000
 
-    time_m = time_add_to_replay_buffer(envM, replayBufferM, n_repeats)
-    time = time_add_to_replay_buffer(env, replayBuffer, n_repeats)
+    time_m_add = time_add_to_replay_buffer(envM, replayBufferM, n_repeats)
+    time_add = time_add_to_replay_buffer(env, replayBuffer, n_repeats)
 
-    print("BufferM add time: {}s, Buffer old add time: {}s".format(time_m, time))
+    print("BufferM add time: {:10.9f}s, Buffer old add time: {:10.9f}s, Ratio: {:4.3f}".format(time_m_add, time_add,
+                                                                                               time_m_add / time_add))
+
+    # n_repeats = 100
+
+    time_m_get = time_get_batch_from_replay_buffer(envM, replayBufferM, n_repeats)
+    time_get = time_get_batch_from_replay_buffer(env, replayBuffer, n_repeats)
+
+    print("BufferM get time: {:10.9f}s, Buffer old get time: {:10.9f}s, Ratio: {:4.3f}".format(time_m_get, time_get,
+                                                                                               time_m_get / time_get))
 
 
 def time_add_to_replay_buffer(env, replayBuffer, n_repeats):
@@ -310,25 +341,46 @@ def time_add_to_replay_buffer(env, replayBuffer, n_repeats):
     return mean_time
 
 
-def print_batch(observation_t, action_t, observation_t_1, reward_t_1, done):
-    for index in range(observation_t.size):
-        print("o_t: {}, a_t: {}, o_t_1: {}, r_t_1: {}, done: {},  o_t_1 - o_t: {}".format(observation_t[index],
-                                                                                         action_t[index],
-                                                                                         observation_t_1[index],
-                                                                                         reward_t_1[index],
-                                                                                         done[index],
-                                                                                         observation_t_1[index] - observation_t[index]))
+def time_get_batch_from_replay_buffer(env, replayBuffer, n_repeats, batch_size=32):
+    n_batches = 0
+    times = np.array([])
+    # Fill buffer
+    replayBuffer.fill_with_random_experience(replayBuffer.size, env)
+
+    while n_batches < n_repeats:
+        start_time = time.time()
+        batch = replayBuffer.get_batch(batch_size)
+        times = np.append(times, time.time() - start_time)
+
+        n_batches += 1
+
+    mean_time = np.mean(times)
+    return mean_time
 
 
-if __name__=='__main__':
+def replay_buffer_size_test():
+    replayBufferM = utils.ExperienceReplayBufferM(1000, [84, 84, 4])
+    replayBuffer = utils.ExperienceReplayBuffer(1000, [84, 84, 4])
+
+    replay_buffer_m_size = asizeof.asizeof(replayBufferM)
+    replay_buffer_size = asizeof.asizeof(replayBuffer)
+
+    print(
+        "Replay buffer M size: {} bytes, Replay buffer old size: {} bytes, Ratio: {:4.3f}".format(replay_buffer_m_size,
+                                                                                                  replay_buffer_size,
+                                                                                                  replay_buffer_m_size / replay_buffer_size))
+
+
+if __name__ == '__main__':
     # one_step_td_loss_test()
     get_scope_variables_test()
     function_pass_to_function_test()
     conv_out_size_test()
     # dqn_atari_conv_net_test()
-    #frame_buffer_test()
-    #experience_replay_buffer_test()
-    #env_wrapper_test()
-    #test_env_test()
+    # frame_buffer_test()
+    # experience_replay_buffer_test()
+    # env_wrapper_test()
+    # test_env_test()
     new_experience_replay_buffer_test()
     new_experience_replay_buffer_timing_test()
+    replay_buffer_size_test()
