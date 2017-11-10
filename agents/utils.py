@@ -93,7 +93,7 @@ class ExperienceReplayBufferM:
 
         # Display data for debugging purposes
         # TODO - for debugging
-        #plot_data(self.experience, self.experience_indices, self.fig, self.ax)
+        #plot_replay_buffer_data(self.experience, self.experience_indices, self.fig, self.ax)
 
     def get_batch(self, batch_size, fixed_batch_size=False):
         # TODO comment
@@ -147,6 +147,7 @@ class ExperienceReplayBufferM:
                 action_t = env.action_space.sample()
                 observation_t_1, reward_t_1, done, _ = env.step(action_t)
 
+                #display_observation(observation_t_1)
                 self.add(observation_t, action_t, observation_t_1, reward_t_1, done)
 
                 observation_t = observation_t_1
@@ -256,7 +257,7 @@ class PrioritisedExperienceReplayBufferM(ExperienceReplayBufferM):
         self.experience['priority'][self.experience_indices['t_1'][-1]] = self.experience['priority'][self.experience_indices['t_1']].max()
 
         # Update sum of priorities
-        self.priority_sum = np.sum(self.experience['priority'][self.experience_indices['t_1']])
+        #self.priority_sum = np.sum(self.experience['priority'][self.experience_indices['t_1']])
 
     def _get_batch_indices(self, batch_size, fixed_batch_size, replace=False):
         transition_counter = self.experience_indices['t_1'].size
@@ -268,11 +269,11 @@ class PrioritisedExperienceReplayBufferM(ExperienceReplayBufferM):
         elif not fixed_batch_size and transition_counter < batch_size:
             self.batch_indices = np.random.choice(sample_indices, transition_counter, replace=replace,
                                                   p=self.experience['priority'][
-                                                        self.experience_indices['t_1']] / self.priority_sum)
+                                                        self.experience_indices['t_1']] / np.sum(self.experience['priority'][self.experience_indices['t_1']]))
         else:
             self.batch_indices = np.random.choice(sample_indices, batch_size, replace=replace,
                                                   p=self.experience['priority'][
-                                                        self.experience_indices['t_1']] / self.priority_sum)
+                                                        self.experience_indices['t_1']] / np.sum(self.experience['priority'][self.experience_indices['t_1']]))
 
     def update_priorities(self, batch_abs_td_error):
         """
@@ -288,7 +289,7 @@ class PrioritisedExperienceReplayBufferM(ExperienceReplayBufferM):
         self.experience['priority'][self.experience_indices['t_1'][self.batch_indices]] = batch_priority
 
         # Update td error total sum
-        self.priority_sum = np.sum(self.experience['priority'][self.experience_indices['t_1']])
+        #self.priority_sum = np.sum(self.experience['priority'][self.experience_indices['t_1']])
 
 
 class ExperienceReplayBuffer:
@@ -504,14 +505,15 @@ def preprocess_atari(atari_observation):
     cropped_observation = greyscale_observation[0:-1, 0:-1]
 
     # Resize
-    resized_observation = cv2.resize(cropped_observation, (84, 110))
+    #resized_observation = cv2.resize(cropped_observation, (84, 110))
+    resized_observation = cv2.resize(cropped_observation, (64, 64))
 
     # Convert to correct dims array
     preprocessed_atari_observation = resized_observation
     return preprocessed_atari_observation
 
 
-def plot_data(experience, experience_indices, fig, ax, sample_indices=None):
+def plot_replay_buffer_data(experience, experience_indices, fig, ax, sample_indices=None):
     titles = ['Full Experience', 'Indexed Experience', 'Sampled Experience', 'Experience Indices', 'Sample Indices']
     for i, axes in enumerate(ax):
         axes.clear()
@@ -547,6 +549,14 @@ def plot_data(experience, experience_indices, fig, ax, sample_indices=None):
     sns.heatmap(full_indices, annot=True, ax=ax[3], fmt='d', cbar=False, xticklabels=['a_t', 'o_t', 'o_t_1', 'r_t_1', 'd_t_1'])
 
     plt.show(block=False)
+
+
+def display_observation(observation):
+    n_frames = observation.shape[2]
+    fix, ax = plt.subplots(1, n_frames)
+    for frame in range(n_frames):
+        ax[frame].imshow(observation[:, :, frame])
+    plt.show()
 
 
 if __name__ == '__main__':

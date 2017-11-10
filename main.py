@@ -29,7 +29,7 @@ flags.DEFINE_string('fixed_params', "{}", 'JSON inputs to fix some params in a H
 # Model configuration
 flags.DEFINE_string('agent_name', 'DQNAgent', 'Unique name of the agent')
 flags.DEFINE_boolean('best', False, 'Force to use the best known configuration')
-flags.DEFINE_float('learning_rate', 2.5e-4, 'The learning rate of SGD')
+flags.DEFINE_float('learning_rate', 2.5e-4/4, 'The learning rate of SGD')
 flags.DEFINE_float('momentum', 0.95, 'The momentum of SGD')
 flags.DEFINE_float('drop_keep_prob', 1.0, 'The dropout keep probability')
 flags.DEFINE_float('l2', 0.0, 'L2 regularisation strength')
@@ -43,22 +43,22 @@ flags.DEFINE_integer('final_exploration_frame', 1000000, 'Frame at which epsilon
 flags.DEFINE_integer('update_target_every', 10000, 'Frequency at which to update the target q network')
 flags.DEFINE_boolean('double_q', True, 'Use double Q learning')
 flags.DEFINE_boolean('prioritised_replay', True, 'Use a prioritised replay buffer')
-flags.DEFINE_float('alpha', 1, 'Prioritised replay strength parameter')
+flags.DEFINE_float('alpha', 0.6, 'Prioritised replay strength parameter')
 flags.DEFINE_integer('frames_to_stack', 4, 'Number of frames to stack as an observation')
 flags.DEFINE_integer('repeat_count', 4, 'Number of frames to repeat each action for')
 flags.DEFINE_boolean('clip_rewards', True, 'Clip_rewards to be -1, 0, 1')
 
 
 # Environment configuration
-flags.DEFINE_string('env', 'Boxing-v0', 'Name of the gym environment to use')
+flags.DEFINE_string('env', 'Breakout-v0', 'Name of the gym environment to use')
 
 # Training configuration
 flags.DEFINE_boolean('debug', False, 'Debug mode')
 flags.DEFINE_integer('max_iter', 100000000, 'Max number of training iterations')
 flags.DEFINE_integer('max_train_episodes', 100000, 'Max number of training episodes')
 flags.DEFINE_boolean('test', False, 'Load a model and compute test performance')
-flags.DEFINE_integer('test_episodes', 10, 'Number of episodes over which to compute test results')
-flags.DEFINE_integer('test_every', 30, 'Episode interval at which to test the agent during training')
+flags.DEFINE_integer('test_episodes', 5, 'Number of episodes over which to compute test results')
+flags.DEFINE_integer('test_every', 300, 'Episode interval at which to test the agent during training')
 flags.DEFINE_integer('render_test_every', 10000, 'Episode interval at which to render the environment during testing')
 flags.DEFINE_integer('render_every', 500000, 'Episode interval at which to render the environment during training')
 flags.DEFINE_integer('summary_every', 50, 'Interval at which to record a summary to tensorboard')
