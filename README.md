@@ -84,3 +84,4 @@ enabled (with minimal hyperparameter search performed):
 2. [Deep Reinforcement Learning with Double Q-Learning](https://arxiv.org/abs/1509.06461)
 3. [Prioritized Experience Replay](https://arxiv.org/pdf/1511.05952.pdf)
 4. [Rainbow: Combining Improvements in Deep Reinforcement Learning](https://arxiv.org/pdf/1710.02298.pdf)
+5. [Project structure](https://blog.metaflow.fr/tensorflow-a-proposal-of-good-practices-for-files-folders-and-models-architecture-f23171501ae3)
