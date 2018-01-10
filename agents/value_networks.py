@@ -34,6 +34,19 @@ def build_q_nets(q_func, q_func_args_list, scope='q_net', double_q=False):
 def multi_layer_perceptron(input_tensor, neurons_per_layer, activations=tf.nn.relu, scope='mlp', reuse=None):
     with tf.variable_scope(scope, reuse=reuse) as net_scope:
         x = input_tensor
+
+        # If the input tensor is not 2D we need to split and stack it so that it is
+        len_x_shape = len(x.shape)
+        while len_x_shape > 2:
+            # Unstack along the final axis
+            x = tf.unstack(x, axis=len_x_shape - 1)
+
+            # Concatenate along the new final axis
+            x = tf.concat(x, axis=len_x_shape - 2)
+
+            # Recompute shape
+            len_x_shape = len(x.shape)
+
         name_count = 0
         if type(activations) is list:
             for n, activation in zip(neurons_per_layer, activations):

@@ -43,7 +43,7 @@ class BaseAgent(object):
         self.batch_size = self.config['batch_size']
         self.replay_buffer_size = self.config['replay_buffer_size']
         self.gamma = self.config['gamma']
-        self.epsilon = self.config['epsilon']
+        self.epsilon_init = self.config['epsilon']
         self.update_target_every = self.config['update_target_every']
         self.double_q = self.config['double_q']
         self.prioritised_replay = self.config['prioritised_replay']
@@ -56,17 +56,15 @@ class BaseAgent(object):
         self.momentum = self.config['momentum']
         self.summary_every = self.config['summary_every']
         self.clip_rewards = self.config['clip_rewards']
-        self.save_every = config['save_every']
-
-        self.epsilon_gradient = (self.epsilon - self.epsilon_final)/(-self.final_exploration_frame)
-        self.epsilon_init = self.epsilon
+        self.save_every = self.config['save_every']
+        self.preprocessor_func_name = self.config['preprocessor_func']
 
         #  Other initialisations
         self.env_steps = 0
         self.train_iter = 0
 
         # Create environment
-        self.preprocess_func = utils.preprocess_atari  # TODO - Specific function not compatible with cartpole
+        self.preprocess_func = utils.select_preprocessor_func(self.preprocessor_func_name)  # TODO - Specific function not compatible with cartpole
         env = gym.make(self.config['env'])
         self.env = utils.EnvWrapper(env,
                                     preprocessor_func=self.preprocess_func,
@@ -79,8 +77,14 @@ class BaseAgent(object):
         # will override this function completely
         self.set_model_props(config)
 
+        # Set up global step
+        self.graph = tf.Graph()
+
+        with self.graph.as_default():
+            self.global_step = tf.Variable(0, trainable=False, name='global_step')
+
         # Again, child Model should provide its own build_graph function
-        self.graph = self.build_graph(tf.Graph())
+        self.graph = self.build_graph(self.graph)
 
         # Any operations that should be in the graph but are common to all models
         # can be added this way, here

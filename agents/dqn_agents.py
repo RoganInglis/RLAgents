@@ -7,9 +7,6 @@ from agents import value_networks
 
 
 class DQNAgent(BaseAgent):
-    """
-    This agent is an implementation of the DQN algorithm
-    """
     def set_model_props(self, config):
         # This function is here to be overridden completely.
         # When you look at your model, you want to know exactly which custom options it needs.
@@ -42,9 +39,15 @@ class DQNAgent(BaseAgent):
                                  'done': tf.placeholder('float', [None], name='done')}
 
             # Create Q nets
+            """
             q_func = value_networks.dqn_atari_conv_net
             q_func_args_list = [[self.placeholders['observation_t'], self.env.action_space.n],
                                 [self.placeholders['observation_t_1'], self.env.action_space.n]]
+            """
+
+            q_func = value_networks.multi_layer_perceptron
+            q_func_args_list = [[self.placeholders['observation_t'], [100, self.env.action_space.n]],
+                                [self.placeholders['observation_t_1'], [100, self.env.action_space.n]]]
 
             q_t, q_t_1, self.target_update_op, q_t_1_d = value_networks.build_q_nets(q_func,
                                                                                      q_func_args_list,
@@ -69,17 +72,21 @@ class DQNAgent(BaseAgent):
             if self.l2 != 0.0:
                 self.loss = self.loss + tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'q_net_1' not in v.name]) * self.l2
 
+            self.epsilon = tf.train.polynomial_decay(self.epsilon_init, self.global_step, self.final_exploration_frame,
+                                                     self.epsilon_final)
+
             tf.summary.scalar('Loss', self.loss)
 
             optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, momentum=self.momentum)
-            self.train_op = optimiser.minimize(self.loss)
+            self.train_op = optimiser.minimize(self.loss, global_step=self.global_step)
 
             self.train_summary = tf.summary.merge_all()
         return graph
 
     def act(self, observation, explore=False):
         # If required choose action according to exploration policy
-        if (np.random.uniform() < self.epsilon) and explore is True:
+        epsilon = self.sess.run(self.epsilon)
+        if (np.random.uniform() < epsilon) and explore is True:
             action = self.env.action_space.sample()
         else:
             action = self.sess.run(self.action, feed_dict={self.placeholders['observation_t']: np.expand_dims(observation, 0)})
@@ -129,7 +136,6 @@ class DQNAgent(BaseAgent):
                 self.train_iter += 1
 
             self.env_steps += 1
-            self.decay_epsilon()
 
             # Set next observation to current observation for next iteration
             observation_t = observation_t_1
@@ -157,7 +163,66 @@ class DQNAgent(BaseAgent):
                                                               reward_dtype=np.float32)
         self.replayBuffer.fill_with_random_experience(self.replay_buffer_init_fill, self.env)
 
-    def decay_epsilon(self):
-        if self.env_steps < self.final_exploration_frame:
-            self.epsilon = self.epsilon_gradient*self.env_steps + self.epsilon_init
+
+class DQNAgentULoss(DQNAgent):
+    def set_model_props(self, config):
+        # This function is here to be overridden completely.
+        # When you look at your model, you want to know exactly which custom options it needs.
+        pass
+
+    def build_graph(self, graph):
+        with graph.as_default():
+            tf.set_random_seed(self.random_seed)
+
+            observation_placeholder_shape = [None]
+            observation_placeholder_shape.extend(self.env.observation_space.shape)
+
+            self.placeholders = {'observation_t': tf.placeholder('float', observation_placeholder_shape,
+                                                                 name='observation_t'),
+                                 'action_t': tf.placeholder(tf.int32, [None], name='action_t'),
+                                 'observation_t_1': tf.placeholder('float', observation_placeholder_shape,
+                                                                   name='observation_t_1'),
+                                 'reward_t_1': tf.placeholder('float', [None], name='reward_t_1'),
+                                 'done': tf.placeholder('float', [None], name='done')}
+
+            # Create Q nets
+            q_func = value_networks.dqn_atari_conv_net
+            q_func_args_list = [[self.placeholders['observation_t'], self.env.action_space.n],
+                                [self.placeholders['observation_t_1'], self.env.action_space.n]]
+
+            q_t, q_t_1, self.target_update_op, q_t_1_d = value_networks.build_q_nets(q_func,
+                                                                                     q_func_args_list,
+                                                                                     double_q=self.double_q)
+
+            # Create op to get action based on observation t
+            self.action = tf.argmax(q_t, axis=1)
+            tf.summary.histogram('action', self.action)
+
+            # TODO - implement optional use of importance sampling correction for prioritised replay in loss function
+            self.loss, td_error = losses.one_step_td_loss(self.placeholders['reward_t_1'],
+                                                          self.gamma,
+                                                          q_t,
+                                                          q_t_1,
+                                                          self.placeholders['action_t'],
+                                                          self.placeholders['done'],
+                                                          double_q=self.double_q,
+                                                          q_t_1_d=q_t_1_d)
+
+            self.abs_td_error = tf.abs(td_error)
+
+            if self.l2 != 0.0:
+                self.loss = self.loss + tf.add_n(
+                    [tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'q_net_1' not in v.name]) * self.l2
+
+            self.epsilon = tf.train.polynomial_decay(self.epsilon_init, self.global_step, self.final_exploration_frame,
+                                                     self.epsilon_final)
+
+            tf.summary.scalar('Loss', self.loss)
+
+            optimiser = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, momentum=self.momentum)
+            self.train_op = optimiser.minimize(self.loss, global_step=self.global_step)
+
+            self.train_summary = tf.summary.merge_all()
+        return graph
+
 

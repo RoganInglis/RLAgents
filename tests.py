@@ -6,6 +6,7 @@ from agents import utils
 import gym
 import time
 from pympler import asizeof
+from tensorflow.python.ops.losses.losses_impl import Reduction
 
 
 def test_out(pass_condition, name):
@@ -30,12 +31,12 @@ def one_step_td_loss_test():
     action_t = tf.placeholder(tf.int32, [None])
     done = tf.placeholder('float', [None])
 
-    loss = losses.one_step_td_loss(reward_t_1, gamma, q_t, q_t_1, action_t, done)
+    loss, _ = losses.one_step_td_loss(reward_t_1, gamma, q_t, q_t_1, action_t, done)
 
     q_target = tf.placeholder('float', [None])
     q_estimate = tf.placeholder('float', [None])
 
-    correct_loss_op = tf.losses.huber_loss(q_target, q_estimate)
+    correct_loss_op = tf.losses.huber_loss(q_target, q_estimate, reduction=Reduction.MEAN)
 
     sess = tf.Session()
 
@@ -372,7 +373,7 @@ def replay_buffer_size_test():
 
 
 if __name__ == '__main__':
-    # one_step_td_loss_test()
+    one_step_td_loss_test()
     get_scope_variables_test()
     function_pass_to_function_test()
     conv_out_size_test()

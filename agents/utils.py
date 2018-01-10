@@ -3,6 +3,7 @@ import cv2
 import gym
 import matplotlib.pyplot as plt
 import seaborn as sns
+import tensorflow as tf
 
 
 class ExperienceReplayBufferM:
@@ -294,7 +295,8 @@ class PrioritisedExperienceReplayBufferM(ExperienceReplayBufferM):
 
 class ExperienceReplayBuffer:
     # TODO comment
-    def __init__(self, size, observation_shape, observation_dtype=np.uint8):
+    def __init__(self, size, observation_shape, observation_dtype=np.uint8, action_dtype=np.uint8,
+                 reward_dtype=np.int16, done_dtype=np.uint8):
         self.size = size
 
         # Make sure shape is list
@@ -305,10 +307,10 @@ class ExperienceReplayBuffer:
 
         # Initialise experience with zeros TODO - May be better to store action as 1 hot bool or small int array?
         self.experience = {'observation_t': np.zeros(self.observation_shape, dtype=observation_dtype),
-                           'action_t': np.zeros(size),
+                           'action_t': np.zeros(size, dtype=action_dtype),
                            'observation_t_1': np.zeros(self.observation_shape, dtype=observation_dtype),
-                           'reward_t_1': np.zeros(size),
-                           'done': np.zeros(size)}
+                           'reward_t_1': np.zeros(size, dtype=reward_dtype),
+                           'done': np.zeros(size, dtype=done_dtype)}
 
         # Initialise fill counter and sample indices
         self.fill_counter = 0
@@ -412,10 +414,10 @@ class FrameBuffer:
         self.retrieve_indices = np.roll(self.retrieve_indices, -1)
 
         # Add frame in correct location (using indices to avoid having to copy and rewrite the entire array by rolling)
-        self.frames[:, :, self.retrieve_indices[-1]] = observation
+        self.frames[..., self.retrieve_indices[-1]] = observation
 
     def get(self):
-        return self.frames[:, :, self.retrieve_indices]
+        return self.frames[..., self.retrieve_indices]
 
     def add_get(self, observation):
         # Add observation to buffer and then return current buffer
@@ -435,7 +437,8 @@ class EnvWrapper(gym.Wrapper):
         super(EnvWrapper, self).__init__(env)
         self.preprocessor_func = preprocessor_func
         self.frames_to_stack = frames_to_stack
-        self.use_frame_buffer = self.frames_to_stack > 1
+        #self.use_frame_buffer = self.frames_to_stack > 1
+        self.use_frame_buffer = True
         self.repeat_count = repeat_count
         self.clip_rewards = clip_rewards
 
@@ -446,16 +449,13 @@ class EnvWrapper(gym.Wrapper):
             test_observation = self.env.reset()
             test_observation = self.preprocessor_func(test_observation.astype(np.uint8))
             observation_shape = test_observation.shape
-            if frames_to_stack > 1:
-                observation_space_shape = (*observation_shape, frames_to_stack)
-            else:
-                observation_space_shape = observation_shape
+
+        observation_space_shape = (*observation_shape, frames_to_stack)
 
         if type(self.observation_space) == gym.spaces.Box:
             self.observation_space = gym.spaces.Box(0, 255, observation_space_shape)
         else:
             raise Exception('The selected environment\'s observation space is not of type Box. Other types are not yet supported by the environment wrapper currently in use' )
-
 
         self.frame_buffer = FrameBuffer(observation_shape, frames_to_stack)
 
@@ -480,9 +480,10 @@ class EnvWrapper(gym.Wrapper):
             total_reward += reward
             current_step += 1
 
-            observation = self.frame_buffer.get()
+        observation = self.frame_buffer.get()
 
-        return observation.astype(np.uint8), total_reward, done, info
+        # TODO - Removed '.astype(np.uint8)' from observation, make sure this doesnt break atari
+        return observation, total_reward, done, info
 
     def _reset(self):
         observation = self.env.reset()
@@ -494,7 +495,33 @@ class EnvWrapper(gym.Wrapper):
             self.frame_buffer.reset()
             observation = self.frame_buffer.add_get(observation)
 
-        return observation.astype(np.uint8)
+        # TODO - Removed '.astype(np.uint8)' from observation, make sure this doesnt break atari
+        return observation
+
+
+def experience_replay_buffer_tensorflow(size, observation_shape,
+                                        observation_dtype=tf.uint8,
+                                        action_dtype=tf.uint8,
+                                        reward_dtype=tf.float16,
+                                        done_dtype=tf.bool):
+
+    with tf.name_scope("replay_buffer"):
+        # Create placeholders for adding to replay buffer
+        input_placeholders = {"observation_t": tf.placeholder(observation_dtype, observation_shape),
+                              "action_t": tf.placeholder(action_dtype, 1),
+                              "observation_t_1": tf.placeholder(observation_dtype, observation_shape),
+                              "reward_t_1": tf.placeholder(reward_dtype, 1),
+                              "done": tf.placeholder(done_dtype, 1)}
+
+        # Create main memory
+        memory = {"observation_t": tf.Variable(tf.zeros([size, *observation_shape], dtype=observation_dtype),
+                                               name="observation_t_memory"),
+                  "action_t": tf.Variable(tf.zeros([size], dtype=action_dtype), name="action_t_memory"),
+                  "observation_t_1": tf.Variable(tf.zeros([size], dtype=action_dtype), name="action_t_memory"),
+                  "reward_t_1": tf.Variable(tf.zeros([size], dtype=action_dtype), name="action_t_memory"),
+                  "done": tf.Variable(tf.zeros([size], dtype=action_dtype), name="action_t_memory")}
+
+        # TODO - complete should return ops for adding and getting - cam use multinomial under one of the tf.??
 
 
 def preprocess_atari(atari_observation):
@@ -511,6 +538,16 @@ def preprocess_atari(atari_observation):
     # Convert to correct dims array
     preprocessed_atari_observation = resized_observation
     return preprocessed_atari_observation
+
+
+def select_preprocessor_func(preprocessor_func_name):
+    if preprocessor_func_name is 'preprocess_atari':
+        preprocessor_func = preprocess_atari
+    elif preprocessor_func_name is 'none':
+        preprocessor_func = None
+    else:
+        raise(NameError('Unknown preprocessor function name'))
+    return preprocessor_func
 
 
 def plot_replay_buffer_data(experience, experience_indices, fig, ax, sample_indices=None):
